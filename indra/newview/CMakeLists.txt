@@ -757,6 +757,7 @@ set(viewer_SOURCE_FILES
     pipeline.cpp
     rlvactions.cpp
     rlvcommon.cpp
+    rlvhelper.cpp
     rlvhandler.cpp
     )
 
@@ -1440,6 +1441,7 @@ set(viewer_HEADER_FILES
     rlvdefines.h
     rlvactions.h
     rlvcommon.h
+    rlvhelper.h
     rlvhandler.h
     roles_constants.h
     )

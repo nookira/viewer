@@ -387,6 +387,7 @@ LLAgent::LLAgent() :
     mbTeleportKeepsLookAt(false),
 
     mAllowedToStand(true),
+    mAllowedToSit(true),
 
     mAgentAccess(new LLAgentAccess(gSavedSettings)),
     mGodLevelChangeSignal(),
@@ -964,8 +965,7 @@ bool LLAgent::isSitting()
 
 void LLAgent::standUp()
 {
-    if (mAllowedToStand)
-        setControlFlags(AGENT_CONTROL_STAND_UP);
+    if (mAllowedToStand) setControlFlags(AGENT_CONTROL_STAND_UP);
 }
 
 void LLAgent::changeParcels()
@@ -1328,7 +1328,7 @@ LLVector3d LLAgent::getPosGlobalFromAgent(const LLVector3 &pos_agent) const
 
 void LLAgent::sitDown()
 {
-    setControlFlags(AGENT_CONTROL_SIT_ON_GROUND);
+    if (mAllowedToSit) setControlFlags(AGENT_CONTROL_SIT_ON_GROUND);
 }
 
 //-----------------------------------------------------------------------------

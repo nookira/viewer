@@ -386,6 +386,8 @@ LLAgent::LLAgent() :
     mbRunning(false),
     mbTeleportKeepsLookAt(false),
 
+    mAllowedToStand(true),
+
     mAgentAccess(new LLAgentAccess(gSavedSettings)),
     mGodLevelChangeSignal(),
     mCanEditParcel(false),
@@ -962,7 +964,8 @@ bool LLAgent::isSitting()
 
 void LLAgent::standUp()
 {
-    setControlFlags(AGENT_CONTROL_STAND_UP);
+    if (mAllowedToStand)
+        setControlFlags(AGENT_CONTROL_STAND_UP);
 }
 
 void LLAgent::changeParcels()

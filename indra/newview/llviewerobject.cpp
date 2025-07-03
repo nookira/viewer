@@ -312,6 +312,7 @@ LLViewerObject::LLViewerObject(const LLUUID &id, const LLPCode pcode, LLViewerRe
     mLastUpdateType(OUT_UNKNOWN),
     mLastUpdateCached(false),
     mExtraParameterList(LLNetworkData::PARAMS_MAX >> 4),
+    mLocked(false),
     mCachedMuteListUpdateTime(0),
     mCachedOwnerInMuteList(false),
     mRiggedAttachedWarned(false)

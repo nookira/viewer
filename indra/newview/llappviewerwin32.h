@@ -45,6 +45,9 @@ public:
 
     bool reportCrashToBugsplat(void* pExcepInfo) override;
 
+    // returns true if there were other windows.
+    static bool sendShutdownToOtherInstances(const std::wstring& install_dir);
+
 protected:
     bool initWindow() override; // Override to initialize the viewer's window.
     void initLoggingAndGetLastDuration() override; // Override to clean stack_trace info.

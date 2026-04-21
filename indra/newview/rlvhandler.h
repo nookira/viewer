@@ -30,6 +30,7 @@
 #include "llchat.h"
 #include "llsingleton.h"
 
+#include <deque>
 #include "rlvhelper.h"
 
 class LLViewerObject;
@@ -48,8 +49,24 @@ class RlvHandler : public LLSingleton<RlvHandler>
      * Command processing
      */
 public:
+
+    // ============================
+    // Command Queue
+    // ============================
+    struct QueuedCommand
+    {
+        RlvCommand cmd;
+        bool fromObj;
+    };
+
+    std::deque<QueuedCommand> mCmdQueue;
+    bool mProcessingQueue = false;
+
+    void enqueueCommand(const LLUUID& idObj, const std::string& strCmd, bool fromObj);
+
     // Command processing helper functions
     bool         handleSimulatorChat(std::string& message, const LLChat& chat, const LLViewerObject* chatObj);
+    void processCommandQueue();
     Rlv::ECmdRet processCommand(const LLUUID& idObj, const std::string& stCmd, bool fromObj);
 protected:
     Rlv::ECmdRet processCommand(std::reference_wrapper<const RlvCommand> rlvCmdRef, bool fromObj);
@@ -62,7 +79,8 @@ public:
     static bool canEnable();
     static bool isEnabled() { return mIsEnabled; }
     static bool setEnabled(bool enable);
-
+    static void attachCategoryRecursive(const LLUUID& folderID);
+    static bool isOutfitBusy();
     /*
      * Event handling
      */

@@ -102,6 +102,8 @@ namespace Rlv
         GetInv,
         Attach,
         AttachOver,
+        AttachAllOver,
+        DetachAll,
         GetCommand,
 
         Count,

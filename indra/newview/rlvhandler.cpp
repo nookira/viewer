@@ -57,7 +57,6 @@ bool RlvHandler::mIsEnabled = false;
 
 bool RlvHandler::handleSimulatorChat(std::string& message, const LLChat& chat, const LLViewerObject* chatObj)
 {
-    // *TODO: There's an edge case for temporary attachments when going from enabled -> disabled with restrictions already in place
     static LLCachedControl<bool> enable_temp_attach(gSavedSettings, Settings::EnableTempAttach);
     static LLCachedControl<bool> show_debug_output(gSavedSettings, Settings::Debug);
     static LLCachedControl<bool> hide_unset_dupes(gSavedSettings, Settings::DebugHideUnsetDup);
@@ -75,12 +74,12 @@ bool RlvHandler::handleSimulatorChat(std::string& message, const LLChat& chat, c
     boost_tokenizer tokens(message, boost::char_separator<char>(",", "", boost::drop_empty_tokens));
     for (const std::string& strCmd : tokens)
     {
-        ECmdRet eRet = processCommand(chat.mFromID, strCmd, true);
-        if ( show_debug_output() &&
-             (!hide_unset_dupes() || (ECmdRet::SuccessUnset != eRet && ECmdRet::SuccessDuplicate != eRet)) )
-        {
-            cmdDbgOut.add(strCmd, eRet);
-        }
+        //  Instead of executing → enqueue
+        enqueueCommand(chat.mFromID, strCmd, true);
+        //if (show_debug_output())
+        //{
+            //cmdDbgOut.add(strCmd, ECmdRet::Queued); 
+        //}
     }
 
     message = cmdDbgOut.get();
@@ -153,6 +152,149 @@ bool RlvHandler::setEnabled(bool enable)
     }
 
     return mIsEnabled;
+}
+
+void RlvHandler::processCommandQueue()
+{
+    if (mCmdQueue.empty())
+    {
+        mProcessingQueue = false;
+        return;
+    }
+    
+    QueuedCommand qc = mCmdQueue.front();
+    
+    // Block attach if COF is busy
+    if (isOutfitBusy())
+    {
+        doAfterInterval([this]() { processCommandQueue(); }, 0.05f);
+        return;
+    }
+    
+    mCmdQueue.pop_front();
+    
+    processCommand(std::ref(qc.cmd), qc.fromObj);
+    
+    LLAppearanceMgr::instance().updateAppearanceFromCOF();
+    
+    /*Okay, what I do is a hammer with nail solution. I still experiment with the delay.
+    There are problems if to many commands are executed at the same time.
+    Thats why I started to use queues as well. 
+    But it does works for the daily usage of these commands most of the time yet.*/
+
+    F32 delay = 0.05f;
+    
+    if (qc.cmd.getBehaviourType() == EBehaviour::DetachAll)
+    
+    delay = 0.2f; // detach requires stability
+
+doAfterInterval([this]()
+{
+    processCommandQueue();
+    
+    }, delay);
+}
+
+bool RlvHandler::isOutfitBusy()
+{
+    return gAgentWearables.isCOFChangeInProgress();
+}
+
+void RlvHandler::enqueueCommand(const LLUUID& idObj, const std::string& strCmd, bool fromObj)
+{
+    mCmdQueue.push_back({ RlvCommand(idObj, strCmd), fromObj });
+
+    if (!mProcessingQueue)
+    {
+        mProcessingQueue = true;
+        processCommandQueue();
+    }
+}
+
+void attachCategoryRecursive(const LLUUID& folderID)
+{
+    LLInventoryModel::cat_array_t* cats = nullptr;
+    LLInventoryModel::item_array_t* items = nullptr;
+
+    gInventory.getDirectDescendentsOf(folderID, cats, items);
+
+    
+    LLAppearanceMgr::instance().addCategoryToCurrentOutfit(folderID);
+
+    if (items)
+    {
+        for (const auto& item : *items)
+        {
+            if (!item) continue;
+
+            //Make sure linked folder with items are also attached
+            if (item->getIsLinkType())
+            {
+                LLUUID target = item->getLinkedUUID();
+                if (!target.isNull())
+                {
+                    attachCategoryRecursive(target);
+                }
+            }
+        }
+    }
+
+    if (!cats) return;
+
+    for (const auto& cat : *cats)
+    {
+        if (!cat) continue;
+
+        const std::string& name = cat->getName();
+        if (!name.empty() && name.front() == '.')
+            continue;
+
+        attachCategoryRecursive(cat->getUUID());
+    }
+}
+
+void detachCategoryRecursive(const LLUUID& folderID)
+{
+    LLInventoryModel::cat_array_t* cats = nullptr;
+    LLInventoryModel::item_array_t* items = nullptr;
+
+    gInventory.getDirectDescendentsOf(folderID, cats, items);
+
+    // Detach all items within this folder
+    LLAppearanceMgr::instance().takeOffOutfit(folderID);
+
+    if (items)
+    {
+        for (const auto& item : *items)
+        {
+            if (!item) continue;
+
+            //Make sure linked folder with items are also detached
+            if (item->getIsLinkType())
+            {
+                LLUUID target = item->getLinkedUUID();
+                if (!target.isNull())
+                {
+                    detachCategoryRecursive(target);
+                }
+            }
+        }
+    }
+
+    // Recursion
+    if (cats)
+    {
+        for (const auto& cat : *cats)
+        {
+            if (!cat) continue;
+
+            const std::string& name = cat->getName();
+            if (!name.empty() && name.front() == '.')
+                continue;
+
+            detachCategoryRecursive(cat->getUUID());
+        }
+    }
 }
 
 // ============================================================================
@@ -394,6 +536,74 @@ ECmdRet ForceHandler<EBehaviour::Detach>::onCommand(const RlvCommand& rlvCmd)
             LLAppearanceMgr::instance().takeOffOutfit(folderID);
         }
     }
+    return ECmdRet::Succeeded;
+}
+
+template<> template<>
+ECmdRet ForceHandler<EBehaviour::AttachAllOver>::onCommand(const RlvCommand& rlvCmd)
+{
+    auto folderID = gInventory.getRootFolderID();
+    LLNameCategoryCollector has_name("#RLV");
+
+    if (!gInventory.hasMatchingDirectDescendent(folderID, has_name))
+        return ECmdRet::FailedNoSharedRoot;
+
+    folderID = findDescendentCategoryIDByName(folderID, "#RLV");
+
+    // If no option is given, attach all subcategories
+    std::vector<std::string> optionList;
+    auto option = rlvCmd.getOption();
+
+    if (!option.empty())
+    {
+        Util::parseStringList(option, optionList, "/");
+
+        for (const auto& name : optionList)
+        {
+            if (!name.empty())
+                folderID = findDescendentCategoryIDByName(folderID, name);
+        }
+    }
+
+    if (folderID.isNull())
+        return ECmdRet::FailedOption;
+
+    attachCategoryRecursive(folderID);
+
+    return ECmdRet::Succeeded;
+}
+
+template<> template<>
+ECmdRet ForceHandler<EBehaviour::DetachAll>::onCommand(const RlvCommand& rlvCmd)
+{
+    LLUUID folderID = gInventory.getRootFolderID();
+
+    LLNameCategoryCollector has_name("#RLV");
+    if (!gInventory.hasMatchingDirectDescendent(folderID, has_name))
+        return ECmdRet::FailedNoSharedRoot;
+
+    folderID = findDescendentCategoryIDByName(folderID, "#RLV");
+
+    std::vector<std::string> optionList;
+    auto option = rlvCmd.getOption();
+
+    // If no option is given, attach all subcategories
+    if (!option.empty())
+    {
+        Util::parseStringList(option, optionList, "/");
+
+        for (const auto& name : optionList)
+        {
+            if (!name.empty())
+                folderID = findDescendentCategoryIDByName(folderID, name);
+        }
+    }
+
+    if (folderID.isNull())
+        return ECmdRet::FailedOption;
+
+    detachCategoryRecursive(folderID);
+
     return ECmdRet::Succeeded;
 }
 

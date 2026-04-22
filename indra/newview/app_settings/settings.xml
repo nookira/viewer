@@ -16771,5 +16771,16 @@
         <key>Value</key>
         <integer>0</integer>
     </map>
+    <key>TurnAvatarToSelectedObject</key>
+    <map>
+      <key>Comment</key>
+      <string>Prevent avatar turns to selected objects</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
 </map>
 </llsd>

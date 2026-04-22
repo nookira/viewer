@@ -3269,7 +3269,14 @@ void LLIMMgr::addMessage(
                 static LLCachedControl<bool> play_snd_mention_pref(gSavedSettings, "PlaySoundChatMention", false);
                 if (!play_snd_mention_pref || !LLUrlRegistry::getInstance()->containsAgentMention(msg))
                 {
-                    make_ui_sound("UISndNewIncomingIMSession");
+                    //Plays a sound when have a new conversation of group chats.
+                    if(session->isGroupSessionType() && gSavedSettings.getBOOL("PlaySoundNewConversationGroups")){
+                        make_ui_sound("UISndNewIncomingIMSession");
+                    }
+
+                    if(!session->isGroupSessionType()){
+                        make_ui_sound("UISndNewIncomingIMSession");
+                    }
                 }
             }
         }

@@ -16793,5 +16793,16 @@
       <key>Value</key>
       <integer>1</integer>
     </map>
+    <key>RevokePerms</key>
+    <map>
+        <key>Comment</key>
+        <string>Revokes objects anim perms on your avatar on: 0) never, 1) on sit, 2) on stand, 3) on sit and stand.</string>
+        <key>Persist</key>
+        <integer>1</integer>
+    <key>Type</key>
+    <string>U32</string>
+    <key>Value</key>
+    <integer>0</integer>
+    </map> 
 </map>
 </llsd>
